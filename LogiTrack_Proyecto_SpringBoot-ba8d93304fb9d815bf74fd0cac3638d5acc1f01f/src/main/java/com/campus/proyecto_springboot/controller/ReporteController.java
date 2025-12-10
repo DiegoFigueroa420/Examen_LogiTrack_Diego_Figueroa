@@ -1,26 +1,5 @@
 package com.campus.proyecto_springboot.controller;
 
-import com.campus.proyecto_springboot.dto.ResumenGeneralDTO;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
-
-@RestController
-@RequestMapping("/reportes")
-public class ReporteController {
-
-    @Autowired
-    private ReporteService reporteService;
-
-    @GetMapping("/resumen")
-    public ResponseEntity<ResumenGeneralDTO> obtenerResumen() {
-        ResumenGeneralDTO resumen = reporteService.obtenerResumenGeneral();
-        return ResponseEntity.ok(resumen);
-    }
-}
-
-package com.campus.proyecto_springboot.controller;
-
 import com.campus.proyecto_springboot.model.MovimientoInventario;
 import com.campus.proyecto_springboot.model.Auditoria;
 import com.campus.proyecto_springboot.model.TipoMovimiento;
@@ -29,7 +8,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.web.bind.annotation.*;
 
-        import java.time.LocalDateTime;
+import java.time.LocalDateTime;
 import java.util.List;
 
 @RestController
