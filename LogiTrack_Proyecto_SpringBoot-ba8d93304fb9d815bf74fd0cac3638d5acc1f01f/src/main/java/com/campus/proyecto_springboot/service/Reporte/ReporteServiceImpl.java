@@ -6,7 +6,6 @@ import com.campus.proyecto_springboot.dto.StockPorBodegaDTO;
 import com.campus.proyecto_springboot.model.DetalleMovimiento;
 import com.campus.proyecto_springboot.model.MovimientoInventario;
 import com.campus.proyecto_springboot.model.TipoMovimiento;
-import com.campus.proyecto_springboot.repository.MovimientoInventarioRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
@@ -28,102 +27,105 @@ public class ReporteServiceImpl implements ReporteService {
         Map<Long, ProductoMasMovidoDTO> productosMasMovidosMap = new HashMap<>();
 
         for (MovimientoInventario mov : movimientos) {
-            TipoMovimiento tipo = mov.getTipoMovimiento();
 
             if (mov.getDetalles() == null) continue;
 
             for (DetalleMovimiento det : mov.getDetalles()) {
+
+                if (det == null || det.getProducto() == null) continue;
+
                 int cantidad = det.getCantidad();
+                Long prodId = det.getProducto().getId();
+                String prodNombre = det.getProducto().getNombre();
 
-                // -------------------------------
-                // 1. Productos más movidos (sumamos cantidad sin importar tipo/bodega)
-                // -------------------------------
-                if (det.getProducto() != null) {
-                    Long prodId = det.getProducto().getId();
-                    String prodNombre = det.getProducto().getNombre();
+                // ====================================
+                // 1. PRODUCTOS MÁS MOVIDOS
+                // ====================================
+                ProductoMasMovidoDTO prodDTO =
+                        productosMasMovidosMap.getOrDefault(
+                                prodId, new ProductoMasMovidoDTO(prodId, prodNombre, 0L)
+                        );
 
-                    ProductoMasMovidoDTO dto =
-                            productosMasMovidosMap.getOrDefault(prodId,
-                                    new ProductoMasMovidoDTO(prodId, prodNombre, 0L));
+                prodDTO.setTotalMovido(prodDTO.getTotalMovido() + cantidad);
+                productosMasMovidosMap.put(prodId, prodDTO);
 
-                    dto.setTotalMovido(dto.getTotalMovido() + cantidad);
-                    productosMasMovidosMap.put(prodId, dto);
-                }
+                // ====================================
+                // 2. STOCK POR BODEGA (NETO)
+                // ====================================
+                TipoMovimiento tipo = mov.getTipoMovimiento();
 
-                // -------------------------------
-                // 2. Stock por bodega (neto de movimientos)
-                // -------------------------------
                 switch (tipo) {
+
                     case ENTRADA -> {
                         if (mov.getBodegaDestino() != null) {
-                            Long bodegaId = mov.getBodegaDestino().getId();
-                            String nombre = mov.getBodegaDestino().getNombre();
-
-                            StockPorBodegaDTO dto =
-                                    stockPorBodegaMap.getOrDefault(bodegaId,
-                                            new StockPorBodegaDTO(bodegaId, nombre, 0L));
-
-                            dto.setStockTotal(dto.getStockTotal() + cantidad);
-                            stockPorBodegaMap.put(bodegaId, dto);
+                            actualizarStockBodega(
+                                    stockPorBodegaMap,
+                                    mov.getBodegaDestino().getId(),
+                                    mov.getBodegaDestino().getNombre(),
+                                    cantidad
+                            );
                         }
                     }
+
                     case SALIDA -> {
                         if (mov.getBodegaOrigen() != null) {
-                            Long bodegaId = mov.getBodegaOrigen().getId();
-                            String nombre = mov.getBodegaOrigen().getNombre();
-
-                            StockPorBodegaDTO dto =
-                                    stockPorBodegaMap.getOrDefault(bodegaId,
-                                            new StockPorBodegaDTO(bodegaId, nombre, 0L));
-
-                            dto.setStockTotal(dto.getStockTotal() - cantidad);
-                            stockPorBodegaMap.put(bodegaId, dto);
+                            actualizarStockBodega(
+                                    stockPorBodegaMap,
+                                    mov.getBodegaOrigen().getId(),
+                                    mov.getBodegaOrigen().getNombre(),
+                                    -cantidad
+                            );
                         }
                     }
-                    case TRANSFERENCIA -> {
-                        // Origen: sale stock
+
+                    case AJUSTE -> {
+                        // Ajustes pueden ser positivos o negativos
                         if (mov.getBodegaOrigen() != null) {
-                            Long bodegaId = mov.getBodegaOrigen().getId();
-                            String nombre = mov.getBodegaOrigen().getNombre();
-
-                            StockPorBodegaDTO dto =
-                                    stockPorBodegaMap.getOrDefault(bodegaId,
-                                            new StockPorBodegaDTO(bodegaId, nombre, 0L));
-
-                            dto.setStockTotal(dto.getStockTotal() - cantidad);
-                            stockPorBodegaMap.put(bodegaId, dto);
-                        }
-
-                        // Destino: entra stock
-                        if (mov.getBodegaDestino() != null) {
-                            Long bodegaId = mov.getBodegaDestino().getId();
-                            String nombre = mov.getBodegaDestino().getNombre();
-
-                            StockPorBodegaDTO dto =
-                                    stockPorBodegaMap.getOrDefault(bodegaId,
-                                            new StockPorBodegaDTO(bodegaId, nombre, 0L));
-
-                            dto.setStockTotal(dto.getStockTotal() + cantidad);
-                            stockPorBodegaMap.put(bodegaId, dto);
+                            actualizarStockBodega(
+                                    stockPorBodegaMap,
+                                    mov.getBodegaOrigen().getId(),
+                                    mov.getBodegaOrigen().getNombre(),
+                                    cantidad  // puede ser positivo o negativo
+                            );
                         }
                     }
                 }
             }
         }
 
-        // Ordenar resultados (opcional): por stock descendente / movimientos descendentes
-        List<StockPorBodegaDTO> stockPorBodegaOrdenado = stockPorBodegaMap.values().stream()
-                .sorted(Comparator.comparingLong(StockPorBodegaDTO::getStockTotal).reversed())
-                .collect(Collectors.toList());
+        // Ordenar los resultados
+        List<StockPorBodegaDTO> stockPorBodegaOrdenado =
+                stockPorBodegaMap.values().stream()
+                        .sorted(Comparator.comparingLong(StockPorBodegaDTO::getStockTotal).reversed())
+                        .collect(Collectors.toList());
 
-        List<ProductoMasMovidoDTO> productosMasMovidosOrdenado = productosMasMovidosMap.values().stream()
-                .sorted(Comparator.comparingLong(ProductoMasMovidoDTO::getTotalMovido).reversed())
-                .collect(Collectors.toList());
+        List<ProductoMasMovidoDTO> productosMasMovidosOrdenado =
+                productosMasMovidosMap.values().stream()
+                        .sorted(Comparator.comparingLong(ProductoMasMovidoDTO::getTotalMovido).reversed())
+                        .collect(Collectors.toList());
 
+        // Crear DTO final
         ResumenGeneralDTO resumen = new ResumenGeneralDTO();
         resumen.setStockPorBodega(stockPorBodegaOrdenado);
         resumen.setProductosMasMovidos(productosMasMovidosOrdenado);
 
         return resumen;
+    }
+
+    // ====================================
+    // MÉTODO AUXILIAR PARA REDUCIR CÓDIGO
+    // ====================================
+    private void actualizarStockBodega(Map<Long, StockPorBodegaDTO> mapa,
+                                       Long bodegaId,
+                                       String nombreBodega,
+                                       int cantidad) {
+
+        StockPorBodegaDTO dto = mapa.getOrDefault(
+                bodegaId,
+                new StockPorBodegaDTO(bodegaId, nombreBodega, 0L)
+        );
+
+        dto.setStockTotal(dto.getStockTotal() + cantidad);
+        mapa.put(bodegaId, dto);
     }
 }

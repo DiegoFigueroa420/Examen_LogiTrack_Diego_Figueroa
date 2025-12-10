@@ -3,7 +3,6 @@ package com.campus.proyecto_springboot.service.MovimientoInventario;
 import com.campus.proyecto_springboot.exception.InvalidInputException;
 import com.campus.proyecto_springboot.exception.ResourceNotFoundException;
 import com.campus.proyecto_springboot.model.*;
-import com.campus.proyecto_springboot.repository.MovimientoInventarioRepository;
 import com.campus.proyecto_springboot.repository.ProductoRepository;
 import com.campus.proyecto_springboot.repository.UsuarioRepository;
 import com.campus.proyecto_springboot.security.CurrentUserService;
